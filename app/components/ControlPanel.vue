@@ -195,7 +195,7 @@ const showAtmosphereSection = ref(false)
           </div>
 
           <!-- Soil Type Select -->
-          <div class="control-group">
+          <div class="control-group" style="position: relative; z-index: 100;">
             <label class="control-sub-label">Tipo de Suelo (Filtración)</label>
             <Select 
               :modelValue="soilType" 
@@ -204,6 +204,7 @@ const showAtmosphereSection = ref(false)
               optionLabel="name" 
               placeholder="Selecciona tipo" 
               class="w-full text-sm font-sans"
+              appendTo="body"
             />
             <span class="slider-helper">La arcilla y roca retienen agua; la arena filtra rápido.</span>
           </div>
@@ -311,6 +312,8 @@ const showAtmosphereSection = ref(false)
   border: none;
   box-shadow: none;
   backdrop-filter: none;
+  overflow: hidden; /* clip to panel bounds except for managed overflows */
+  border-radius: 20px; /* match parent container */
 }
 
 .panel-header {
@@ -341,7 +344,10 @@ const showAtmosphereSection = ref(false)
 .panel-body {
   flex-grow: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0.75rem 1.25rem;
+  /* Allow Select dropdown to overflow */
+  position: relative;
 }
 
 .panel-body::-webkit-scrollbar {

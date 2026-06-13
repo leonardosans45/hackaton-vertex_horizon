@@ -222,7 +222,7 @@ const terzaghiTooltipText = computed(() => {
         
         <!-- Real-time Elevation and Slope details (calculated on Map Click) -->
         <div class="relief-section">
-          <h3>Georreferencia & Relieve</h3>
+          <h3 class="section-heading"><i class="pi pi-compass section-heading-icon"></i>Georreferencia & Relieve</h3>
           
           <div class="clicked-info-box" v-if="lastClickedCoords">
             <div class="coord-tag animate-fade-in">
@@ -252,8 +252,10 @@ const terzaghiTooltipText = computed(() => {
           </div>
           
           <div class="no-click-info" v-else>
-            <i class="pi pi-info-circle"></i>
-            <span>Haz clic en el mapa para altitud/pendiente, o dibuja un polígono para mediciones detalladas.</span>
+            <div class="no-click-icon-wrapper">
+              <i class="pi pi-map-marker"></i>
+            </div>
+            <span>Haz clic en el mapa para obtener altitud y pendiente, o dibuja un polígono para mediciones de área.</span>
           </div>
         </div>
 
@@ -296,8 +298,8 @@ const terzaghiTooltipText = computed(() => {
 
         <!-- DXF Uploader & CAD loader -->
         <div class="cad-section">
-          <h3>Planos CAD (DWG / DXF)</h3>
-          <p class="section-desc">Opcional. Carga planos para evaluar si la obra es viable. Si no cargas ninguno, la IA estimará una estructura residencial estándar.</p>
+          <h3 class="section-heading"><i class="pi pi-file-edit section-heading-icon"></i>Planos CAD</h3>
+          <p class="section-desc">Opcional. Carga planos para evaluar si la obra es viable. Sin planos, la IA estimará una estructura residencial estándar.</p>
           
           <input 
             type="file" 
@@ -583,6 +585,8 @@ const terzaghiTooltipText = computed(() => {
   border: none;
   box-shadow: none;
   backdrop-filter: none;
+  overflow: hidden;
+  border-radius: 20px;
 }
 
 .panel-header {
@@ -607,6 +611,140 @@ const terzaghiTooltipText = computed(() => {
   overflow-y: auto;
   overflow-x: hidden; /* Fix horizontal overflow tests */
   padding: 0.75rem 1.25rem;
+}
+
+/* Section Headings with icons */
+.section-heading {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #e2e8f0;
+  margin: 0 0 0.65rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-heading-icon {
+  font-size: 0.82rem;
+  color: #c084fc;
+}
+
+/* Relief and CAD section spacing */
+.relief-section {
+  margin-bottom: 1.25rem;
+}
+
+.cad-section {
+  margin-bottom: 1rem;
+}
+
+/* Empty state for no-click */
+.no-click-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.65rem;
+  padding: 1.25rem 1rem;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px dashed rgba(139, 92, 246, 0.2);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.no-click-icon-wrapper {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 50%;
+  color: #c084fc;
+  font-size: 1rem;
+}
+
+/* CAD status indicator */
+.cad-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 8px;
+  margin-top: 0.5rem;
+}
+
+.status-indicator {
+  width: 7px;
+  height: 7px;
+  background: #34d399;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.animate-pulse {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(52, 211, 153, 0); }
+}
+
+.status-info {
+  font-size: 0.7rem;
+  color: #34d399;
+  font-weight: 600;
+  flex-grow: 1;
+}
+
+.clear-cad-btn {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-cad-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Source info text under metrics */
+.src-info {
+  font-size: 0.58rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.val-wrapper {
+  min-height: 1.25rem;
+}
+
+.val-loader {
+  font-size: 0.85rem;
+  color: #c084fc;
+}
+
+/* AQI level text */
+.aqi-level-text {
+  font-size: 0.75rem;
+  color: #e2e8f0;
+  margin-bottom: 0.35rem;
+}
+
+.aqi-body {
+  margin-top: 0.35rem;
 }
 
 /* Semáforo Viabilidad de Obra */
