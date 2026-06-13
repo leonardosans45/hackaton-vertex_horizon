@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "dxf": {
+      "source": "earthtojake/text-to-cad",
+      "sourceType": "github",
+      "skillPath": "skills/dxf/SKILL.md",
+      "computedHash": "e802f98f7d661a3c2ee3db26d5043bb528bc60069465fbaaf165cea7eb31e53d"
+    },
+    "elevation-and-depth": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "skillPath": "skills/elevation-and-depth/SKILL.md",
+      "computedHash": "480c5f9e4029b8a7c6d8f0f0f03fdcfa8ce382ab62c2f54d09410d652b1f83e7"
+    },
+    "preview-leaflet": {
+      "source": "veelenga/preview-skills",
+      "sourceType": "github",
+      "skillPath": "skills/preview-leaflet/SKILL.md",
+      "computedHash": "8428e91424528fd7a94a57a5563ba2b553be399ab355e548b154da58f6a69569"
+    },
+    "weather": {
+      "source": "steipete/clawdis",
+      "sourceType": "github",
+      "skillPath": "skills/weather/SKILL.md",
+      "computedHash": "eb777bfdab720ad8c237deb547b49d61015686a076d171a73353c22ef2d9d020"
+    }
+  }
+}
