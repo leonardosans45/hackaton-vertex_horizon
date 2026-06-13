@@ -16,6 +16,7 @@ const props = defineProps<{
   windSpeed: number
   windDirection: number
   activeElevation: number | null
+  zoom?: number
 }>()
 
 const emit = defineEmits<{
@@ -105,7 +106,7 @@ const initMap = () => {
   mapInstance = L.map(mapElement.value, {
     zoomControl: false,
     attributionControl: false
-  }).setView(props.center, 14)
+  }).setView(props.center, props.zoom !== undefined ? props.zoom : 14)
 
   L.control.scale({ position: 'bottomleft', imperial: false }).addTo(mapInstance)
   L.control.zoom({ position: 'bottomright' }).addTo(mapInstance)
@@ -462,8 +463,14 @@ const stopAnimation = () => {
 // Watchers
 watch(() => props.center, (newCenter) => {
   if (mapInstance) {
-    mapInstance.setView(newCenter, 14)
+    mapInstance.setView(newCenter, props.zoom !== undefined ? props.zoom : 14)
     updateOverlays()
+  }
+})
+
+watch(() => props.zoom, (newZoom) => {
+  if (mapInstance && newZoom !== undefined) {
+    mapInstance.setZoom(newZoom)
   }
 })
 
