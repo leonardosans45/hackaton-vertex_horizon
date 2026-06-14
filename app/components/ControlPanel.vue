@@ -318,10 +318,14 @@ const showAtmosphereSection = ref(false)
           <div class="control-group" style="margin-top: 0.5rem;">
             <div class="flex-row-space-between">
               <span class="control-sub-label" style="margin: 0;">Activar Nubosidad</span>
-              <ToggleSwitch 
-                :modelValue="cloudsVisible" 
-                @update:modelValue="(val: boolean) => emit('update:cloudsVisible', val)" 
-              />
+              <label class="switch">
+                <input 
+                  type="checkbox" 
+                  :checked="cloudsVisible" 
+                  @change="(e: any) => emit('update:cloudsVisible', e.target.checked)"
+                />
+                <span class="slider round"></span>
+              </label>
             </div>
             <span class="slider-helper">Visualiza nubes físicas en movimiento sobre el mapa.</span>
           </div>
@@ -623,5 +627,61 @@ const showAtmosphereSection = ref(false)
 .preset-btn.active .preset-icon {
   color: #ffffff;
   filter: drop-shadow(0 0 4px #c084fc);
+}
+
+/* Custom CSS Toggle Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 18px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: .25s ease;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #cbd5e1;
+  transition: .25s ease;
+}
+
+input:checked + .slider {
+  background-color: rgba(139, 92, 246, 0.25);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+  background-color: #ffffff;
+  box-shadow: 0 0 6px rgba(168, 85, 247, 0.8);
+}
+
+.slider.round {
+  border-radius: 20px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
 }
 </style>
