@@ -23,11 +23,13 @@ const emit = defineEmits<{
   (e: 'mockCadClick'): void
   (e: 'clearCadClick'): void
   (e: 'runAgentAnalysis'): void
+  (e: 'saveReportClick'): void
+  (e: 'exportPdfClick'): void
   (e: 'update:activeTab', tab: 'terreno' | 'agente'): void
 }>()
 
 const dxfInputRef = ref<HTMLInputElement | null>(null)
-const activeAgentSection = ref<'topo' | 'riesgos' | 'normativa' | 'termico' | 'cotejo'>('topo')
+const activeAgentSection = ref<'topo' | 'riesgos' | 'normativa' | 'termico' | 'cotejo' | 'permisos' | 'costos' | 'sostenibilidad'>('topo')
 
 // Main layout tabs: 'terreno' (CAD & Measurements) vs 'agente' (IA analysis report)
 const activeMainTab = computed({
@@ -434,9 +436,16 @@ const terzaghiTooltipText = computed(() => {
                 <button 
                   :class="{ active: activeAgentSection === 'normativa' }" 
                   @click="activeAgentSection = 'normativa'"
-                  title="Norma"
+                  title="Linderos"
                 >
-                  Normas
+                  Linderos
+                </button>
+                <button 
+                  :class="{ active: activeAgentSection === 'permisos' }" 
+                  @click="activeAgentSection = 'permisos'"
+                  title="Permisos & Normas"
+                >
+                  Permisos
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'termico' }" 
@@ -451,6 +460,20 @@ const terzaghiTooltipText = computed(() => {
                   :title="hasCadOverlay ? 'Cotejo CAD' : 'Estimación Obra'"
                 >
                   {{ hasCadOverlay ? 'Cotejo CAD' : 'Estimación Obra' }}
+                </button>
+                <button 
+                  :class="{ active: activeAgentSection === 'costos' }" 
+                  @click="activeAgentSection = 'costos'"
+                  title="Costos & Finanzas"
+                >
+                  Costos
+                </button>
+                <button 
+                  :class="{ active: activeAgentSection === 'sostenibilidad' }" 
+                  @click="activeAgentSection = 'sostenibilidad'"
+                  title="Sostenibilidad"
+                >
+                  Sostenibilidad
                 </button>
               </div>
 
@@ -566,12 +589,52 @@ const terzaghiTooltipText = computed(() => {
                     <span>{{ agentResponse.cotejo_cad_matematico.veredicto_estructural }}</span>
                   </div>
                 </div>
+
+                <!-- PERMISOS TAB -->
+                <div v-if="activeAgentSection === 'permisos'" class="agent-tab-pane animate-fade-in">
+                  <span class="pane-title"><i class="pi pi-file pane-icon text-indigo-400"></i> Permisos Municipales</span>
+                  <p class="pane-desc">{{ agentResponse?.permisos_municipales || 'Evaluación de licencias municipales pendiente.' }}</p>
+                  
+                  <span class="pane-title"><i class="pi pi-map pane-icon text-indigo-300"></i> Normas de Desarrollo Urbano</span>
+                  <p class="pane-desc">{{ agentResponse?.normas_desarrollo_urbano || 'Normas urbanísticas estatales y municipales no definidas.' }}</p>
+                </div>
+
+                <!-- COSTOS TAB -->
+                <div v-if="activeAgentSection === 'costos'" class="agent-tab-pane animate-fade-in">
+                  <span class="pane-title"><i class="pi pi-dollar pane-icon text-emerald-400"></i> Costos de Preparación</span>
+                  <p class="pane-desc font-semibold text-emerald-400">{{ agentResponse?.estimacion_costos || 'Cálculo de costos no disponible.' }}</p>
+                  
+                  <span class="pane-title"><i class="pi pi-chart-line pane-icon text-teal-400"></i> Sostenibilidad Financiera</span>
+                  <p class="pane-desc">{{ agentResponse?.sostenibilidad_financiera || 'Viabilidad financiera del proyecto no evaluada.' }}</p>
+                </div>
+
+                <!-- SOSTENIBILIDAD TAB -->
+                <div v-if="activeAgentSection === 'sostenibilidad'" class="agent-tab-pane animate-fade-in">
+                  <span class="pane-title"><i class="pi pi-leaf pane-icon text-emerald-500"></i> Sostenibilidad Ambiental</span>
+                  <p class="pane-desc">{{ agentResponse?.sostenibilidad_ambiental || 'Impacto ecológico y mitigaciones no disponibles.' }}</p>
+
+                  <span class="pane-title"><i class="pi pi-users pane-icon text-sky-400"></i> Sostenibilidad Social</span>
+                  <p class="pane-desc">{{ agentResponse?.sostenibilidad_social || 'Evaluación de impacto social pendiente.' }}</p>
+
+                  <div v-if="agentResponse?.evaluacion_construccion" class="thermal-card hvac-integration" style="margin-top: 1rem;">
+                    <span class="pane-title"><i class="pi pi-building pane-icon text-yellow-400"></i> Evaluación de Construcción Existente</span>
+                    <p class="pane-desc font-medium">{{ agentResponse?.evaluacion_construccion }}</p>
+                  </div>
+                </div>
               </div>
 
-              <!-- Re-run button -->
-              <button class="agent-re-run-btn" @click="emit('runAgentAnalysis')">
-                <i class="pi pi-refresh"></i> Re-analizar Terreno
-              </button>
+              <!-- Action row: Re-run, Save, Export -->
+              <div class="agent-actions-row">
+                <button class="agent-action-btn run-btn" @click="emit('runAgentAnalysis')">
+                  <i class="pi pi-refresh"></i> Re-analizar
+                </button>
+                <button class="agent-action-btn save-btn" @click="emit('saveReportClick')">
+                  <i class="pi pi-save"></i> Guardar
+                </button>
+                <button class="agent-action-btn export-btn" @click="emit('exportPdfClick')">
+                  <i class="pi pi-file-pdf"></i> Exportar PDF
+                </button>
+              </div>
 
             </div>
           </div>
@@ -1112,20 +1175,96 @@ const terzaghiTooltipText = computed(() => {
   padding: 3px;
   gap: 3px;
   margin-bottom: 0.85rem;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+}
+
+.agent-tabs::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .agent-tabs button {
-  flex: 1;
+  flex: 1 0 auto;
   background: transparent;
   border: none;
   font-family: inherit;
   font-size: 0.65rem;
   font-weight: 800;
   color: var(--text-muted-dark);
-  padding: 0.4rem 0;
+  padding: 0.45rem 0.6rem;
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+/* Actions Row Buttons Styling */
+.agent-actions-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+  width: 100%;
+}
+
+.agent-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  padding: 0.5rem 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+}
+
+.agent-action-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+  transform: translateY(-1px);
+}
+
+.agent-action-btn i {
+  font-size: 0.75rem;
+}
+
+.agent-action-btn.run-btn {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.25);
+  color: #c084fc;
+}
+
+.agent-action-btn.run-btn:hover {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
+.agent-action-btn.save-btn {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.agent-action-btn.save-btn:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.agent-action-btn.export-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.agent-action-btn.export-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .agent-tabs button:hover {

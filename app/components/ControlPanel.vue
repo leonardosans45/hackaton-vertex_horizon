@@ -12,6 +12,10 @@ const props = defineProps<{
   cloudCoverage: number
   windSpeed: number
   windDirection: number
+  // New project options
+  propertyType: { name: string; code: string; icon: string }
+  propertyCondition: { name: string; code: string; icon: string }
+  terrainState: { name: string; code: string; icon: string }
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +26,9 @@ const emit = defineEmits<{
   (e: 'update:cloudCoverage', val: number): void
   (e: 'update:windSpeed', val: number): void
   (e: 'update:windDirection', val: number): void
+  (e: 'update:propertyType', val: { name: string; code: string; icon: string }): void
+  (e: 'update:propertyCondition', val: { name: string; code: string; icon: string }): void
+  (e: 'update:terrainState', val: { name: string; code: string; icon: string }): void
   (e: 'toggleSimulation'): void
 }>()
 
@@ -39,11 +46,11 @@ const handleSoilChange = (val: any) => {
   emit('update:soilType', val)
 }
 
-// Weather/Climate presets definition
+// Weather/Climate presets definition (Renamed to Lluvioso and Nevado)
 const weatherPresets = [
   {
     name: 'desert',
-    label: 'Desierto',
+    label: 'Desértico',
     icon: 'pi pi-sun',
     description: 'Calor extremo, sin lluvia y cielo despejado',
     rainfall: 0,
@@ -55,7 +62,7 @@ const weatherPresets = [
   },
   {
     name: 'storm',
-    label: 'Tormenta',
+    label: 'Lluvioso',
     icon: 'pi pi-cloud-download',
     description: 'Lluvia intensa con alta densidad de nubes y fuertes vientos',
     rainfall: 80,
@@ -79,7 +86,7 @@ const weatherPresets = [
   },
   {
     name: 'glacial',
-    label: 'Glacial',
+    label: 'Nevado',
     icon: 'pi pi-snowflake',
     description: 'Frío bajo cero, viento fuerte y nubosidad espesa',
     rainfall: 40,
@@ -117,7 +124,28 @@ const activePreset = computed(() => {
   return match ? match.name : ''
 })
 
+const propertyTypeOptions = [
+  { name: 'Residencial', code: 'RESIDENTIAL', icon: 'pi pi-home' },
+  { name: 'Comercial', code: 'COMMERCIAL', icon: 'pi pi-briefcase' },
+  { name: 'Plaza', code: 'MALL', icon: 'pi pi-building' },
+  { name: 'Industrial', code: 'INDUSTRIAL', icon: 'pi pi-cog' }
+]
+
+const propertyConditionOptions = [
+  { name: 'Venta', code: 'SALE', icon: 'pi pi-dollar' },
+  { name: 'Renta', code: 'RENT', icon: 'pi pi-calendar' },
+  { name: 'Ejido', code: 'EJIDO', icon: 'pi pi-exclamation-triangle' },
+  { name: 'Propio', code: 'OWNED', icon: 'pi pi-key' }
+]
+
+const terrainStateOptions = [
+  { name: 'Baldío', code: 'EMPTY', icon: 'pi pi-leaf' },
+  { name: 'Mantener', code: 'KEEP', icon: 'pi pi-wrench' },
+  { name: 'Derribar', code: 'DEMOLISH', icon: 'pi pi-trash' }
+]
+
 const showTerrainSection = ref(true)
+const showProjectSection = ref(true)
 const showAtmosphereSection = ref(false)
 </script>
 
@@ -207,6 +235,74 @@ const showAtmosphereSection = ref(false)
               appendTo="body"
             />
             <span class="slider-helper">La arcilla y roca retienen agua; la arena filtra rápido.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCORDION SECTION: PROJECT & CONSTRUCTION -->
+      <div class="accordion-item" :class="{ open: showProjectSection }">
+        <button class="accordion-header" @click="showProjectSection = !showProjectSection">
+          <span class="accordion-title"><i class="pi pi-briefcase text-purple"></i> Proyecto & Edificación</span>
+          <i class="pi" :class="showProjectSection ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+        </button>
+        
+        <div class="accordion-content" v-show="showProjectSection">
+          <!-- Tipo de Propiedad -->
+          <div class="control-group" style="margin-top: 0.5rem;">
+            <label class="control-sub-label">Tipo de Proyecto</label>
+            <div class="presets-grid">
+              <button 
+                v-for="opt in propertyTypeOptions" 
+                :key="opt.code"
+                class="preset-btn"
+                :class="{ active: propertyType.code === opt.code }"
+                @click="emit('update:propertyType', opt)"
+                :title="opt.name"
+              >
+                <i :class="opt.icon + ' preset-icon'"></i>
+                <span>{{ opt.name }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="control-section-divider"></div>
+
+          <!-- Condición Legal -->
+          <div class="control-group">
+            <label class="control-sub-label">Condición Legal</label>
+            <div class="presets-grid">
+              <button 
+                v-for="opt in propertyConditionOptions" 
+                :key="opt.code"
+                class="preset-btn"
+                :class="{ active: propertyCondition.code === opt.code }"
+                @click="emit('update:propertyCondition', opt)"
+                :title="opt.name"
+              >
+                <i :class="opt.icon + ' preset-icon'"></i>
+                <span>{{ opt.name }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="control-section-divider"></div>
+
+          <!-- Estado de Construcción -->
+          <div class="control-group">
+            <label class="control-sub-label">Construcción Existente</label>
+            <div class="presets-grid" style="grid-template-columns: repeat(3, 1fr);">
+              <button 
+                v-for="opt in terrainStateOptions" 
+                :key="opt.code"
+                class="preset-btn"
+                :class="{ active: terrainState.code === opt.code }"
+                @click="emit('update:terrainState', opt)"
+                :title="opt.name"
+              >
+                <i :class="opt.icon + ' preset-icon'"></i>
+                <span>{{ opt.name }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

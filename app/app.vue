@@ -66,6 +66,11 @@ const activeTileStyle = ref('satellite')
 const searchQuery = ref('')
 const isSearching = ref(false)
 
+// New project parameters
+const propertyType = ref({ name: 'Residencial', code: 'RESIDENTIAL', icon: 'pi pi-home' })
+const propertyCondition = ref({ name: 'Propio', code: 'OWNED', icon: 'pi pi-key' })
+const terrainState = ref({ name: 'Baldío', code: 'EMPTY', icon: 'pi pi-leaf' })
+
 // Weather & Simulation
 const rainfall = ref(35)
 const temperature = ref(24)
@@ -297,7 +302,10 @@ const generateLocalFallbackAnalysis = (
   soilFactor: number,
   temp: number,
   rain: number,
-  hasCad: boolean
+  hasCad: boolean,
+  propType: string,
+  propCond: string,
+  stateTerrain: string
 ) => {
   const slopeVal = slope || 0
   const elevVal = elevation || 1500
@@ -350,6 +358,76 @@ const generateLocalFallbackAnalysis = (
     disenoTermico.push("Maximizar ganancias térmicas directas con acristalamiento doble (duo-vent).")
   }
 
+  // 1. Permisos Municipales
+  let permisos = ""
+  if (propType === 'Industrial') {
+    permisos = "Licencia de Uso de Suelo Industrial (Zonificación Pesada), Estudio de Impacto Ambiental (MIA Estatal), Licencia de Construcción Especial, y Visto Bueno de Protección Civil."
+  } else if (propType === 'Plaza' || propType === 'Comercial') {
+    permisos = "Licencia de Uso de Suelo Comercial, Dictamen de Impacto Vial y Tránsito, Licencia de Construcción Comercial con cajones de estacionamiento mínimos, y Licencia de Funcionamiento."
+  } else {
+    permisos = "Alineamiento y Número Oficial, Licencia de Construcción Residencial (Obra Nueva/Ampliación), Dictamen de Agua Potable y Drenaje municipal."
+  }
+
+  // 2. Normas de Desarrollo Urbano
+  let normas = ""
+  if (propType === 'Industrial') {
+    normas = "Coeficiente de Ocupación del Suelo (COS): 0.60 máx. Coeficiente de Utilización del Suelo (CUS): 1.2 máx. Restricción frontal mínima de 10.0m y laterales de 5.0m. Altura máxima: 15 metros."
+  } else if (propType === 'Plaza' || propType === 'Comercial') {
+    normas = "COS: 0.70 máx, CUS: 2.0 máx. Estacionamiento: 1 cajón por cada 15m² rentables. Área verde permeable obligatoria: 15% del terreno."
+  } else {
+    normas = "COS: 0.65 máx, CUS: 1.3 máx. Altura: Máximo 3 niveles o 9 metros. Restricción posterior: 3.0m."
+  }
+
+  // 3. Estimación de Costos de Preparación de Terreno
+  let costoPrep = "Bajo"
+  if (slopeVal > 20 || soilName.toLowerCase().includes('rocoso')) {
+    costoPrep = "Alto - Requiere excavación mecánica pesada, voladuras controladas o martillo hidráulico, y construcción de muros de contención."
+  } else if (slopeVal > 8 || soilName.toLowerCase().includes('arcilloso') || stateTerrain === 'DEMOLISH') {
+    costoPrep = `Medio - Requiere ${stateTerrain === 'DEMOLISH' ? 'demolición mecánica de estructura previa y remoción de escombros' : 'terrazado básico de taludes y mejoramiento de suelo arcilloso expansivo con cal/cemento'}.`
+  } else {
+    costoPrep = "Bajo - Terreno plano con suelo arenoso/limoso. Nivelación simple y desmonte menor."
+  }
+
+  // 4. Sostenibilidad Financiera
+  let finSost = ""
+  if (propCond === 'SALE') {
+    finSost = `Proyecto orientado a la venta. Tasa Interna de Retorno (TIR) estimada en 18-22% anual. Periodo de recuperación de inversión de 3 a 5 años dependiendo de la velocidad de preventas.`
+  } else if (propCond === 'RENT') {
+    finSost = `Esquema de renta de espacios. Rendimiento por arrendamiento (Cap Rate) proyectado del 8.5% al 10.2% anual. Flujo de caja neto positivo a partir del mes 18 posterior a la construcción.`
+  } else if (propCond === 'EJIDO') {
+    finSost = "¡Atención! Propiedad de carácter ejidal. Riesgo de tenencia de la tierra. Requiere regularización ante el Registro Agrario Nacional (RAN) para dominio pleno antes de cualquier inversión mayor."
+  } else {
+    finSost = `Terreno propio. Reduce el costo inicial del proyecto en un 25%. Aumenta la rentabilidad financiera directa y el margen neto sobre ventas, reduciendo la exposición al apalancamiento bancario.`
+  }
+
+  // 5. Sostenibilidad Ambiental
+  let envSost = ""
+  if (soilName.toLowerCase().includes('arcilloso') || soilName.toLowerCase().includes('rocoso')) {
+    envSost = "Baja permeabilidad del suelo. Se exige la implementación de pozos de absorción pluvial profunda y celdas fotovoltaicas en techos para mitigar el consumo de energía en la red pública."
+  } else {
+    envSost = "Suelo apto para infiltración pluvial directa. Propuesta de áreas de absorción nativas de bajo consumo de agua y reciclaje de aguas grises para riego local."
+  }
+
+  // 6. Sostenibilidad Social
+  let socSost = ""
+  if (propType === 'Industrial') {
+    socSost = "Generación de empleo directo para la comunidad. Sin embargo, requiere amortiguamiento acústico y visual para no perturbar áreas residenciales contiguas."
+  } else if (propType === 'Plaza' || propType === 'Comercial') {
+    socSost = "Alta valoración comunitaria por acercamiento de servicios e infraestructura peatonal segura. Incrementa la plusvalía de las viviendas aledañas."
+  } else {
+    socSost = "Vivienda familiar de bajo impacto social directo. Contribuye a la consolidación del tejido urbano residencial del sector."
+  }
+
+  // 7. Evaluación de Construcción Existente
+  let evalConst = ""
+  if (stateTerrain === 'KEEP') {
+    evalConst = "La edificación existente presenta condiciones para ser integrada estructuralmente. Se recomienda realizar un peritaje estructural de refuerzo para adaptarla al nuevo uso propuesto sin demolición completa, ahorrando hasta un 40% en costos de obra gruesa."
+  } else if (stateTerrain === 'DEMOLISH') {
+    evalConst = "La edificación existente no cumple con la normatividad actual ni la distribución funcional. Se recomienda la demolición mecánica total. El costo de retiro de escombro se calcula en el presupuesto inicial y se aconseja triturar el concreto viejo para usarlo como subbase."
+  } else {
+    evalConst = "Sin construcciones previas. El terreno está baldío y listo para trazo y nivelación directa de obra nueva."
+  }
+
   return {
     conclusion_para_agente_principal: `Análisis local (Fallback): El terreno presenta una viabilidad estructural clasificada como ${veredicto.toLowerCase()}. Se recomienda ${slopeVal > 15 ? 'atención prioritaria a la estabilidad del talud' : 'cimentación estándar corrida'} en combinación con drenajes adecuados debido al suelo tipo ${soilName}.`,
     analisis_topografico: {
@@ -375,7 +453,14 @@ const generateLocalFallbackAnalysis = (
         : "No se proporcionó plano CAD. El cálculo estructural asume una configuración típica residencial unifamiliar con apoyos distribuidos uniformemente.",
       calculos_ingenieria: `[Cálculo Estructural Local]\nCapacidad de carga admisible (Terzaghi): ${capacityVal} kPa\nFactor de seguridad de estabilidad de taludes: FS = ${calculatedFS}\nSaturación crítica del suelo: ${(soilFactor * 100).toFixed(0)}%\nCoeficiente de fricción interna (estimado): 28°`,
       veredicto_estructural: veredicto
-    }
+    },
+    permisos_municipales: permisos,
+    normas_desarrollo_urbano: normas,
+    estimacion_costos: costoPrep,
+    sostenibilidad_financiera: finSost,
+    sostenibilidad_ambiental: envSost,
+    sostenibilidad_social: socSost,
+    evaluacion_construccion: evalConst
   }
 }
 
@@ -395,16 +480,16 @@ const runAgentAnalysis = async () => {
     : `Altitud real de ${currentElevation.value || 'desconocida'} metros, pendiente aproximada de ${currentSlope.value || 0}%, temperatura de suelo ${temperature.value}°C con tipo de suelo ${soilType.value.name}.`
 
   // Format AutoCAD DXF/planos_2d details to include specific columns coordinates and counts
-  let planosDescription = 'No se ha proporcionado plano de AutoCAD (es opcional). Por lo tanto, realiza la estimación estructural y cálculos de cimentación (capacidad de carga Terzaghi, estabilidad de taludes FS) para una residencia estándar unifamiliar típica de 2 niveles (~150 m²) construida sobre este terreno.'
+  let planosDescription = `No se ha proporcionado plano de AutoCAD (es opcional). Evaluar las condiciones sin plano para un proyecto tipo: ${propertyType.value.name}, en condición legal: ${propertyCondition.value.name}, y estado de terreno: ${terrainState.value.name} (${terrainState.value.code === 'EMPTY' ? 'Obra nueva' : terrainState.value.code === 'KEEP' ? 'Mantener edificación' : 'Demoler edificación'}). Realizar estimación de costos de preparación, viabilidad ambiental, social, de costos, permisos requeridos, y normas de desarrollo urbano municipal y estatal.`
   if (hasPolygon) {
-    planosDescription = `No se ha proporcionado plano de AutoCAD (es opcional). Realizar la estimación y cálculos estructurales (capacidad de carga Terzaghi, estabilidad de taludes FS) para una residencia estándar unifamiliar típica de 2 niveles (~150 m²) adaptada a este terreno de ${Math.round(drawnZoneMetrics.value.area).toLocaleString()} m².`
+    planosDescription = `No se ha proporcionado plano de AutoCAD (es opcional). Realizar la estimación y cálculos estructurales (capacidad de carga Terzaghi, estabilidad de taludes FS) para una edificación tipo: ${propertyType.value.name}, en condición legal: ${propertyCondition.value.name}, y estado de terreno: ${terrainState.value.name} (${terrainState.value.code === 'EMPTY' ? 'Obra nueva' : terrainState.value.code === 'KEEP' ? 'Mantener edificación' : 'Demoler edificación'}). Adaptada a este terreno medido de ${Math.round(drawnZoneMetrics.value.area).toLocaleString()} m².`
   }
   if (hasCadOverlay.value && cadData.value) {
     const linesCount = cadData.value.filter(e => e.type === 'line').length
     const polylinesCount = cadData.value.filter(e => e.type === 'polyline').length
     const circlesCount = cadData.value.filter(e => e.type === 'circle').length
     
-    planosDescription = `Planos de cimentación AutoCAD cargados con ${cadData.value.length} elementos vectoriales. Contiene: ${linesCount} líneas estructurales de muros, ${polylinesCount} polígonos de delimitación y curvas de nivel, y ${circlesCount} círculos de cimentación/columnas de carga.`
+    planosDescription = `Planos de cimentación AutoCAD cargados con ${cadData.value.length} elementos vectoriales. Contiene: ${linesCount} líneas estructurales de muros, ${polylinesCount} polígonos de delimitación y curvas de nivel, y ${circlesCount} círculos de cimentación/columnas de carga. Evaluar este diseño CAD en relación al proyecto tipo: ${propertyType.value.name}, condición: ${propertyCondition.value.name}, estado de terreno: ${terrainState.value.name} (${terrainState.value.code === 'EMPTY' ? 'Obra nueva' : terrainState.value.code === 'KEEP' ? 'Mantener edificación' : 'Demoler edificación'}). Calcular la capacidad de carga Terzaghi, estabilidad de taludes FS y viabilidad total.`
     
     const columnCoords = cadData.value
       .filter(e => e.type === 'circle')
@@ -438,7 +523,11 @@ const runAgentAnalysis = async () => {
           sessionId: `session-${Date.now()}`,
           coordenadas: coordsStr,
           descripcion_terreno: descStr,
-          planos_2d: planosDescription
+          planos_2d: planosDescription,
+          tipo_propiedad: propertyType.value.name,
+          condicion_legal: propertyCondition.value.name,
+          estado_terreno: terrainState.value.name,
+          evaluar_construccion_existente: terrainState.value.code !== 'EMPTY'
         },
         signal: controller.signal
       })
@@ -494,11 +583,291 @@ const runAgentAnalysis = async () => {
     const rain = rainfall.value
     const hasCad = hasCadOverlay.value
 
-    agentResponse.value = generateLocalFallbackAnalysis(lat, lng, slope, elevation, soilName, soilFactor, temp, rain, hasCad)
+    agentResponse.value = generateLocalFallbackAnalysis(
+      lat,
+      lng,
+      slope,
+      elevation,
+      soilName,
+      soilFactor,
+      temp,
+      rain,
+      hasCad,
+      propertyType.value.name,
+      propertyCondition.value.name,
+      terrainState.value.code
+    )
     loadingAgent.value = false
   } else {
     loadingAgent.value = false
   }
+}
+
+const saveReport = () => {
+  if (!agentResponse.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Reporte Vacío',
+      detail: 'No hay un reporte activo para guardar.',
+      life: 2500
+    })
+    return
+  }
+
+  const report = {
+    id: Date.now(),
+    fecha: new Date().toLocaleDateString('es-MX', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    ubicacion: searchQuery.value || (lastClickedCoords.value ? `${lastClickedCoords.value[0].toFixed(5)}, ${lastClickedCoords.value[1].toFixed(5)}` : 'Coordenadas del mapa'),
+    coordenadas: lastClickedCoords.value,
+    parametros: {
+      suelo: soilType.value.name,
+      clima: temperature.value > 30 ? 'Cálido/Desértico' : temperature.value < 5 ? 'Frío/Nevado' : 'Templado',
+      lluvia: `${rainfall.value} mm`,
+      temperatura: `${temperature.value} °C`,
+      tipoPropiedad: propertyType.value.name,
+      condicionLegal: propertyCondition.value.name,
+      estadoTerreno: terrainState.value.name
+    },
+    resultado: agentResponse.value
+  }
+
+  const existingReports = JSON.parse(localStorage.getItem('vh_reports') || '[]')
+  existingReports.unshift(report)
+  localStorage.setItem('vh_reports', JSON.stringify(existingReports))
+
+  toast.add({
+    severity: 'success',
+    summary: 'Reporte Guardado',
+    detail: 'El análisis de terreno se guardó localmente en su historial.',
+    life: 3000
+  })
+}
+
+const exportReportPdf = () => {
+  if (!agentResponse.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Reporte Vacío',
+      detail: 'No hay datos de análisis para exportar.',
+      life: 2500
+    })
+    return
+  }
+
+  const response = agentResponse.value
+  const coords = lastClickedCoords.value ? `${lastClickedCoords.value[0].toFixed(6)}, ${lastClickedCoords.value[1].toFixed(6)}` : 'N/A'
+  
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte Vertex Horizon - Análisis de Terreno</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+    .header {
+      border-bottom: 2px solid #8b5cf6;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      color: #a78bfa;
+      font-size: 28px;
+    }
+    .header .meta {
+      text-align: right;
+      font-size: 14px;
+      color: #94a3b8;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .card h3 {
+      margin-top: 0;
+      color: #c084fc;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 10px;
+    }
+    .param-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .param-list li {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .param-list li span:first-child {
+      color: #94a3b8;
+    }
+    .report-section {
+      margin-bottom: 25px;
+      background: rgba(30, 41, 59, 0.3);
+      padding: 20px;
+      border-radius: 10px;
+      border-left: 4px solid #a78bfa;
+    }
+    .report-section h2 {
+      margin-top: 0;
+      color: #ffffff;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .report-section p {
+      font-size: 14px;
+      color: #cbd5e1;
+      margin: 10px 0 0 0;
+    }
+    .btn-print {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #8b5cf6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-weight: bold;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-print:hover {
+      background: #7c3aed;
+      transform: scale(1.05);
+    }
+    @media print {
+      .btn-print { display: none; }
+      body { background: white; color: black; padding: 20px; }
+      .card { background: none; border: 1px solid #ddd; }
+      .report-section { background: none; border-left-color: #7c3aed; border-top: 1px solid #eee; border-right: 1px solid #eee; border-bottom: 1px solid #eee; }
+      .header h1 { color: #7c3aed; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Vertex Horizon</h1>
+      <p style="margin: 5px 0 0 0; color: #94a3b8;">Estudio Técnico y de Viabilidad de Obra</p>
+    </div>
+    <div class="meta">
+      <div>Fecha: ${new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      <div>Coordenadas: ${coords}</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Datos de Ubicación y Topografía</h3>
+      <ul class="param-list">
+        <li><span>Elevación Promedio:</span> <span>${drawnZoneMetrics.value?.avgElevation || currentElevation.value || '---'} m</span></li>
+        <li><span>Pendiente Promedio:</span> <span>${drawnZoneMetrics.value?.avgSlope || currentSlope.value || '---'} %</span></li>
+        <li><span>Área de Terreno:</span> <span>${drawnZoneMetrics.value ? Math.round(drawnZoneMetrics.value.area).toLocaleString() + ' m²' : 'Ubicación puntual'}</span></li>
+        <li><span>Tipo de Suelo:</span> <span>${soilType.value.name}</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Parámetros de Proyecto</h3>
+      <ul class="param-list">
+        <li><span>Tipo de Proyecto:</span> <span>${propertyType.value.name}</span></li>
+        <li><span>Condición Legal:</span> <span>${propertyCondition.value.name}</span></li>
+        <li><span>Estado del Terreno:</span> <span>${terrainState.value.name}</span></li>
+        <li><span>Temperatura/Clima:</span> <span>${temperature.value}°C (Lluvia: ${rainfall.value}mm)</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="report-section" style="border-left-color: #10b981;">
+    <h2>Recomendación Principal</h2>
+    <p>${response.conclusion_para_agente_principal || 'N/A'}</p>
+  </div>
+
+  <div class="report-section">
+    <h2>Análisis de Relieve y Topografía</h2>
+    <p>${response.analisis_topografico?.pendientes_y_curvas || 'N/A'}</p>
+  </div>
+
+  <div class="report-section">
+    <h2>Riesgos Ambientales & Mitigación</h2>
+    <p><strong>Vulnerabilidad Hidrológica:</strong> ${response.riesgos_ambientales?.vulnerabilidad_hidrologica || 'N/A'}</p>
+    <p style="margin-top: 10px;"><strong>Mitigaciones Sugeridas:</strong></p>
+    <ul>
+      ${(response.riesgos_ambientales?.medidas_mitigacion || []).map((m: string) => `<li>${m}</li>`).join('')}
+    </ul>
+  </div>
+
+  <div class="report-section">
+    <h2>Permisos Municipales & Normativa</h2>
+    <p><strong>Permisos Requeridos:</strong> ${response.permisos_municipales || 'N/A'}</p>
+    <p style="margin-top: 10px;"><strong>Linderos y Restricciones:</strong> ${response.viabilidad_normativa?.restricciones_linderos || 'N/A'}</p>
+    <p style="margin-top: 10px;"><strong>Normas de Desarrollo Urbano:</strong> ${response.normas_desarrollo_urbano || 'N/A'}</p>
+  </div>
+
+  <div class="report-section">
+    <h2>Costos de Preparación & Finanzas</h2>
+    <p><strong>Costos de Obra de Preparación:</strong> ${response.estimacion_costos || 'N/A'}</p>
+    <p style="margin-top: 10px;"><strong>Sostenibilidad Financiera:</strong> ${response.sostenibilidad_financiera || 'N/A'}</p>
+  </div>
+
+  <div class="report-section">
+    <h2>Sostenibilidad Ambiental & Social</h2>
+    <p><strong>Impacto y Criterios Ambientales:</strong> ${response.sostenibilidad_ambiental || 'N/A'}</p>
+    <p style="margin-top: 10px;"><strong>Aceptación e Impacto Social:</strong> ${response.sostenibilidad_social || 'N/A'}</p>
+    ${response.evaluacion_construccion ? `<p style="margin-top: 10px;"><strong>Edificación Existente:</strong> ${response.evaluacion_construccion}</p>` : ''}
+  </div>
+
+  <button class="btn-print" onclick="window.print()">Imprimir / Guardar PDF</button>
+</body>
+</html>
+  `
+
+  const blob = new Blob([htmlContent], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `reporte-terreno-${coords.replace(', ', '-')}.html`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  toast.add({
+    severity: 'success',
+    summary: 'Reporte Exportado',
+    detail: 'Abra el archivo descargado para imprimir o guardar como PDF.',
+    life: 5000
+  })
 }
 
 const handleDwgFile = async (file: File) => {
@@ -922,6 +1291,9 @@ const toggleDarkMode = () => {
           v-model:cloudCoverage="cloudCoverage"
           v-model:windSpeed="windSpeed"
           v-model:windDirection="windDirection"
+          v-model:propertyType="propertyType"
+          v-model:propertyCondition="propertyCondition"
+          v-model:terrainState="terrainState"
           :soilOptions="soilOptions"
           :simulationRunning="simulationRunning"
           @toggleSimulation="toggleSimulation"
@@ -949,6 +1321,8 @@ const toggleDarkMode = () => {
           @mockCadClick="loadMockCadBlueprint"
           @clearCadClick="clearCadOverlay"
           @runAgentAnalysis="runAgentAnalysis"
+          @saveReportClick="saveReport"
+          @exportPdfClick="exportReportPdf"
         />
       </div>
 
