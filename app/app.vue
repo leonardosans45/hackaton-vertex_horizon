@@ -153,8 +153,8 @@ const searchLocation = async () => {
       return
     }
 
-    // 2. Default Nominatim address geocoding search
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(searchQuery.value)}`)
+    // 2. Default Nominatim address geocoding search (prioritizing Mexico for local regulations)
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=mx&q=${encodeURIComponent(searchQuery.value)}`)
     const data = await res.json()
     if (data && data[0]) {
       const lat = parseFloat(data[0].lat)
@@ -166,8 +166,8 @@ const searchLocation = async () => {
         topoMapRef.value.flyTo(mapCenter.value, 15)
       }
 
-      fetchWeather(lat, lng)
-      fetchAQI(lat, lng)
+      // Automatically trigger the map click logic to load elevations, slopes, weather, and run AI analysis
+      await handleMapClick(lat, lng)
 
       toast.add({
         severity: 'success',
@@ -240,8 +240,9 @@ const handleMapClick = async (lat: number, lng: number) => {
     if (topoMapRef.value) {
       topoMapRef.value.flyTo(mapCenter.value, 14)
     }
-    fetchWeather(lat, lng)
   }
+
+  fetchWeather(lat, lng)
 
   loadingElevation.value = true
   currentElevation.value = null
@@ -281,6 +282,24 @@ const handleMapClick = async (lat: number, lng: number) => {
 
 const handleDrawnPolygon = (metrics: any) => {
   drawnZoneMetrics.value = metrics
+  
+  if (metrics.center) {
+    const [lat, lng] = metrics.center
+    lastClickedCoords.value = [lat, lng]
+    mapCenter.value = [lat, lng]
+    
+    // Update active elevation and slope to the averages computed inside the delimited terrain
+    if (metrics.avgElevation !== null) {
+      currentElevation.value = metrics.avgElevation
+    }
+    if (metrics.avgSlope !== null) {
+      currentSlope.value = metrics.avgSlope
+    }
+    
+    fetchWeather(lat, lng)
+    fetchAQI(lat, lng)
+  }
+
   activeMainTab.value = 'agente' // Auto-switch to Agent tab on polygon draw
   toast.add({
     severity: 'info',
