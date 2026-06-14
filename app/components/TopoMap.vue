@@ -45,6 +45,7 @@ let waterLayer: any = null
 let dxfLayerGroup: any = null
 let animationFrameId: number | null = null
 let clouds: any[] = []
+let centerMarker: any = null
 
 // Wind Rose state
 const mapHeading = ref(0)
@@ -222,6 +223,10 @@ const initMap = () => {
         </div>
       `).openPopup()
 
+      const centroid = turf.centroid(polygon)
+      const centerLat = centroid.geometry.coordinates[1]
+      const centerLng = centroid.geometry.coordinates[0]
+
       emit('drawnPolygon', { 
         area, 
         perimeter, 
@@ -229,7 +234,8 @@ const initMap = () => {
         maxElevation, 
         avgElevation, 
         maxSlope, 
-        avgSlope 
+        avgSlope,
+        center: [centerLat, centerLng]
       })
     } else if (e.shape === 'Polyline') {
       const latlngs = layer.getLatLngs()
@@ -413,6 +419,21 @@ const updateOverlays = () => {
       })
     }
   }
+
+  // 4. Center marker representing evaluation point
+  if (centerMarker) {
+    mapInstance.removeLayer(centerMarker)
+  }
+  if (props.hasSelectedLocation && center) {
+    centerMarker = L.marker(center).addTo(mapInstance)
+      .bindPopup(`
+        <div class="map-popup">
+          <h3><i class="pi pi-map-marker"></i> Terreno Seleccionado</h3>
+          <p><strong>Latitud:</strong> ${center[0].toFixed(5)}</p>
+          <p><strong>Longitud:</strong> ${center[1].toFixed(5)}</p>
+        </div>
+      `)
+  }
 }
 
 // Particle system loop for clouds and wind
@@ -497,14 +518,24 @@ watch(() => props.hasSelectedLocation, (newVal) => {
 
 watch(() => props.center, (newCenter) => {
   if (mapInstance) {
-    mapInstance.setView(newCenter, props.zoom !== undefined ? props.zoom : 14)
+    const currentCenter = mapInstance.getCenter()
+    const dist = Math.abs(currentCenter.lat - newCenter[0]) + Math.abs(currentCenter.lng - newCenter[1])
+    if (dist > 0.0001) {
+      if (!props.hasSelectedLocation) {
+        mapInstance.setView(newCenter, props.zoom !== undefined ? props.zoom : 5)
+      }
+    }
     updateOverlays()
   }
 })
 
 watch(() => props.zoom, (newZoom) => {
   if (mapInstance && newZoom !== undefined) {
-    mapInstance.setZoom(newZoom)
+    if (!props.hasSelectedLocation) {
+      if (mapInstance.getZoom() !== newZoom) {
+        mapInstance.setZoom(newZoom)
+      }
+    }
   }
 })
 
