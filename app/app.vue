@@ -270,7 +270,7 @@ const handleMapClick = async (lat: number, lng: number) => {
   const h2 = calculateMockElevation(lat - offset, lng)
   const distance = 133
   const diff = Math.abs(h1 - h2)
-  currentSlope.value = Math.min(Math.round((diff / distance) * 100), 48)
+  currentSlope.value = Math.min(Math.round((diff / distance) * 45), 28)
 
   fetchAQI(lat, lng)
 
@@ -312,10 +312,10 @@ const generateLocalFallbackAnalysis = (
   const tempVal = temp || 20
   const rainVal = rain || 30
   
-  const baseFS = 2.5
-  const slopeImpact = slopeVal * 0.035
-  const soilImpact = (soilFactor - 0.3) * 0.8
-  const calculatedFS = Math.max(0.8, Math.min(3.0, parseFloat((baseFS - slopeImpact - soilImpact).toFixed(2))))
+  const baseFS = 3.0
+  const slopeImpact = slopeVal * 0.025
+  const soilImpact = (soilFactor - 0.3) * 0.4
+  const calculatedFS = Math.max(1.0, Math.min(3.0, parseFloat((baseFS - slopeImpact - soilImpact).toFixed(2))))
   
   let baseCapacity = 300
   if (soilName.toLowerCase().includes('arenoso')) baseCapacity = 180
@@ -325,8 +325,8 @@ const generateLocalFallbackAnalysis = (
   const capacityVal = Math.round(baseCapacity + (2500 - elevVal) * 0.02)
 
   let veredicto = "Aprobado"
-  if (calculatedFS < 1.3) veredicto = "Rechazado (Inestable)"
-  else if (calculatedFS < 1.5) veredicto = "Acondicionado (Estabilidad Marginal)"
+  if (calculatedFS < 1.4) veredicto = "Rechazado (Inestabilidad Crítica)"
+  else if (calculatedFS < 1.8) veredicto = "Acondicionado (Pendiente Moderada)"
 
   let hydroVuln = "Baja"
   if (rainVal > 70 || (soilName.toLowerCase().includes('arcilloso') && rainVal > 40)) {
