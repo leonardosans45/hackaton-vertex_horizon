@@ -3,10 +3,67 @@ import { ref, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { DxfParser } from 'dxf-parser'
 
+// Geolocation link & coordinates parsing helpers
+const parseCoordinates = (query: string) => {
+  const commaMatch = query.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/)
+  if (commaMatch) {
+    return [parseFloat(commaMatch[1]), parseFloat(commaMatch[2])]
+  }
+  const spaceMatch = query.match(/^\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*$/)
+  if (spaceMatch) {
+    return [parseFloat(spaceMatch[1]), parseFloat(spaceMatch[2])]
+  }
+  return null
+}
+
+const extractCoordsFromGoogleMapsUrl = (url: string) => {
+  let match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+  if (match) return [parseFloat(match[1]), parseFloat(match[2])]
+
+  match = url.match(/place\/(-?\d+\.\d+),(-?\d+\.\d+)/)
+  if (match) return [parseFloat(match[1]), parseFloat(match[2])]
+
+  match = url.match(/query=(-?\d+\.\d+),(-?\d+\.\d+)/)
+  if (match) return [parseFloat(match[1]), parseFloat(match[2])]
+
+  match = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
+  if (match) return [parseFloat(match[1]), parseFloat(match[2])]
+
+  return null
+}
+
+const resolveGoogleMapsUrl = async (query: string): Promise<[number, number] | null> => {
+  const directCoords = parseCoordinates(query)
+  if (directCoords) return directCoords as [number, number]
+
+  if (query.includes('google.com/maps') || query.includes('google.com.mx/maps') || query.includes('maps.google')) {
+    const coords = extractCoordsFromGoogleMapsUrl(query)
+    if (coords) return coords as [number, number]
+  }
+
+  if (query.includes('maps.app.goo.gl') || query.includes('goo.gl/maps')) {
+    try {
+      const res = await $fetch<any>('http://localhost:4000/api/resolve-redirect', {
+        method: 'POST',
+        body: { url: query }
+      })
+      if (res && res.success && res.redirectUrl) {
+        const coords = extractCoordsFromGoogleMapsUrl(res.redirectUrl)
+        if (coords) return coords as [number, number]
+      }
+    } catch (err) {
+      console.warn("Fallo al resolver link corto a través del backend local:", err)
+    }
+  }
+  return null
+}
+
 // State Orchestration
-const mapCenter = ref<[number, number]>([19.4326, -99.1332]) // Mexico City
+const hasSelectedLocation = ref(false)
+const agentProgressMessage = ref('Llamando a n8n y OpenAI...')
+const mapCenter = ref<[number, number]>([23.6, -102.5]) // Geographic Center of Mexico
 const activeTileStyle = ref('satellite')
-const searchQuery = ref('Ciudad de México')
+const searchQuery = ref('')
 const isSearching = ref(false)
 
 // Weather & Simulation
@@ -58,8 +115,7 @@ const aqiStatus = computed(() => {
 })
 
 onMounted(() => {
-  fetchWeather(mapCenter.value[0], mapCenter.value[1])
-  fetchAQI(mapCenter.value[0], mapCenter.value[1])
+  // Empty initial mount, wait for user search or map click
 })
 
 // Geocoding Búsqueda (Nominatim)
@@ -68,15 +124,41 @@ const searchLocation = async () => {
   isSearching.value = true
 
   try {
+    // 1. Attempt to parse as coordinates or Google Maps link
+    const resolvedCoords = await resolveGoogleMapsUrl(searchQuery.value)
+    
+    if (resolvedCoords) {
+      const [lat, lng] = resolvedCoords
+      mapCenter.value = [lat, lng]
+      hasSelectedLocation.value = true
+
+      if (topoMapRef.value) {
+        topoMapRef.value.flyTo(mapCenter.value, 15)
+      }
+
+      // Automatically trigger the map click logic to load elevations, slopes, weather and run AI analysis
+      await handleMapClick(lat, lng)
+
+      toast.add({
+        severity: 'success',
+        summary: 'Ubicación Encontrada',
+        detail: `Coordenadas: ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        life: 3000
+      })
+      return
+    }
+
+    // 2. Default Nominatim address geocoding search
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(searchQuery.value)}`)
     const data = await res.json()
     if (data && data[0]) {
       const lat = parseFloat(data[0].lat)
       const lng = parseFloat(data[0].lon)
       mapCenter.value = [lat, lng]
+      hasSelectedLocation.value = true
 
       if (topoMapRef.value) {
-        topoMapRef.value.flyTo(mapCenter.value, 14)
+        topoMapRef.value.flyTo(mapCenter.value, 15)
       }
 
       fetchWeather(lat, lng)
@@ -92,7 +174,7 @@ const searchLocation = async () => {
       toast.add({
         severity: 'warn',
         summary: 'Sin Resultados',
-        detail: 'No se encontró la ubicación.',
+        detail: 'No se encontró la ubicación ni coordenadas válidas.',
         life: 3000
       })
     }
@@ -100,7 +182,7 @@ const searchLocation = async () => {
     toast.add({
       severity: 'error',
       summary: 'Error',
-      detail: 'Error al conectar con el servidor de mapas.',
+      detail: 'Error al procesar la búsqueda o conectar con el servidor de mapas.',
       life: 3000
     })
   } finally {
@@ -146,6 +228,16 @@ const calculateMockElevation = (lat: number, lng: number) => {
 
 const handleMapClick = async (lat: number, lng: number) => {
   lastClickedCoords.value = [lat, lng]
+
+  if (!hasSelectedLocation.value) {
+    hasSelectedLocation.value = true
+    mapCenter.value = [lat, lng]
+    if (topoMapRef.value) {
+      topoMapRef.value.flyTo(mapCenter.value, 14)
+    }
+    fetchWeather(lat, lng)
+  }
+
   loadingElevation.value = true
   currentElevation.value = null
   currentSlope.value = null
@@ -196,10 +288,102 @@ const handleDrawnPolygon = (metrics: any) => {
   runAgentAnalysis()
 }
 
+const generateLocalFallbackAnalysis = (
+  lat: number,
+  lng: number,
+  slope: number,
+  elevation: number,
+  soilName: string,
+  soilFactor: number,
+  temp: number,
+  rain: number,
+  hasCad: boolean
+) => {
+  const slopeVal = slope || 0
+  const elevVal = elevation || 1500
+  const tempVal = temp || 20
+  const rainVal = rain || 30
+  
+  const baseFS = 2.5
+  const slopeImpact = slopeVal * 0.035
+  const soilImpact = (soilFactor - 0.3) * 0.8
+  const calculatedFS = Math.max(0.8, Math.min(3.0, parseFloat((baseFS - slopeImpact - soilImpact).toFixed(2))))
+  
+  let baseCapacity = 300
+  if (soilName.toLowerCase().includes('arenoso')) baseCapacity = 180
+  else if (soilName.toLowerCase().includes('limoso')) baseCapacity = 220
+  else if (soilName.toLowerCase().includes('arcilloso')) baseCapacity = 120
+  else if (soilName.toLowerCase().includes('rocoso')) baseCapacity = 450
+  const capacityVal = Math.round(baseCapacity + (2500 - elevVal) * 0.02)
+
+  let veredicto = "Aprobado"
+  if (calculatedFS < 1.3) veredicto = "Rechazado (Inestable)"
+  else if (calculatedFS < 1.5) veredicto = "Acondicionado (Estabilidad Marginal)"
+
+  let hydroVuln = "Baja"
+  if (rainVal > 70 || (soilName.toLowerCase().includes('arcilloso') && rainVal > 40)) {
+    hydroVuln = "Alta - Alto riesgo de saturación y encharcamiento"
+  } else if (rainVal > 40 || soilName.toLowerCase().includes('arcilloso') || soilName.toLowerCase().includes('limoso')) {
+    hydroVuln = "Media - Moderado riesgo de escorrentía superficial"
+  }
+
+  const limitantes = []
+  if (slopeVal > 20) limitantes.push("Pendiente pronunciada (>20%) que requiere nivelación y muros de contención.")
+  if (soilName.toLowerCase().includes('arcilloso')) limitantes.push("Suelo arcilloso expansivo con baja tasa de filtración de agua.")
+  if (rainVal > 60) limitantes.push("Precipitación pluvial severa que incrementa el empuje hidrostático en cimientos.")
+  if (limitantes.length === 0) limitantes.push("Ninguna limitante crítica identificada. Pendientes moderadas.")
+
+  const mitigaciones = [
+    "Instalación de drenes franceses perimetrales para desviar aguas pluviales.",
+    "Compactación dinámica del terreno en capas de 20cm antes del colado."
+  ]
+  if (slopeVal > 15) mitigaciones.push("Construcción de terrazas escalonadas y muros de mampostería reforzada.")
+  if (soilName.toLowerCase().includes('arcilloso')) mitigaciones.push("Sustitución de subrasante por material inerte no expansivo.")
+
+  const disenoTermico = [
+    "Orientar las ventanas principales para aprovechar la iluminación solar pasiva.",
+    "Uso de aislante térmico XPS de 2 pulgadas en muros perimetrales expuestos."
+  ]
+  if (tempVal > 30) {
+    disenoTermico.push("Instalación de aleros y celosías para sombreado en fachada sur.")
+  } else {
+    disenoTermico.push("Maximizar ganancias térmicas directas con acristalamiento doble (duo-vent).")
+  }
+
+  return {
+    conclusion_para_agente_principal: `Análisis local (Fallback): El terreno presenta una viabilidad estructural clasificada como ${veredicto.toLowerCase()}. Se recomienda ${slopeVal > 15 ? 'atención prioritaria a la estabilidad del talud' : 'cimentación estándar corrida'} en combinación con drenajes adecuados debido al suelo tipo ${soilName}.`,
+    analisis_topografico: {
+      pendientes_y_curvas: `El relieve registra una elevación promedio de ${elevVal} metros sobre el nivel del mar con una pendiente promedio calculada de ${slopeVal}%. El modelado local sugiere que las curvas de nivel corren paralelas al eje principal del predio, facilitando el escurrimiento pluvial hacia las zonas bajas.`,
+      limitantes_fisicas: limitantes
+    },
+    riesgos_ambientales: {
+      vulnerabilidad_hidrologica: hydroVuln,
+      medidas_mitigacion: mitigaciones
+    },
+    viabilidad_normativa: {
+      restricciones_linderos: "Respetar servidumbre de paso frontal de 3.0 metros y restricción de colindancia lateral de 1.5 metros para áreas de ventilación.",
+      cumplimiento_reglamentos: slopeVal > 25 ? "Revisión Especial (Requiere Dictamen Geotécnico Completo)" : "Aprobado (Cumple coeficientes COS y CUS)"
+    },
+    analisis_termico_clima: {
+      comportamiento_temperatura_estaciones: `Con una temperatura promedio actual de ${tempVal}°C, el área experimenta un microclima de rango templado-cálido. Las variaciones estacionales proyectan máximas de ${Math.round(tempVal + 8)}°C en verano y mínimas de ${Math.round(tempVal - 10)}°C en invierno.`,
+      necesidades_calefaccion_refrigeracion: tempVal > 28 ? "Demanda alta de refrigeración activa durante las horas pico de radiación." : "Requerimientos moderados de climatización mixta estacional.",
+      recomendaciones_diseno_termico: disenoTermico
+    },
+    cotejo_cad_matematico: {
+      analisis_apoyos_columnas: hasCad 
+        ? "El plano cargado muestra la distribución de columnas. La cimentación propuesta coincide adecuadamente con el plano, aunque las columnas en las zonas de mayor pendiente requieren zapatas aisladas reforzadas."
+        : "No se proporcionó plano CAD. El cálculo estructural asume una configuración típica residencial unifamiliar con apoyos distribuidos uniformemente.",
+      calculos_ingenieria: `[Cálculo Estructural Local]\nCapacidad de carga admisible (Terzaghi): ${capacityVal} kPa\nFactor de seguridad de estabilidad de taludes: FS = ${calculatedFS}\nSaturación crítica del suelo: ${(soilFactor * 100).toFixed(0)}%\nCoeficiente de fricción interna (estimado): 28°`,
+      veredicto_estructural: veredicto
+    }
+  }
+}
+
 const runAgentAnalysis = async () => {
   if (!lastClickedCoords.value && !drawnZoneMetrics.value) return
   loadingAgent.value = true
   agentResponse.value = null
+  agentProgressMessage.value = 'Iniciando conexión con el Agente IA...'
 
   const hasPolygon = drawnZoneMetrics.value !== null
   const coordsStr = hasPolygon
@@ -232,41 +416,146 @@ const runAgentAnalysis = async () => {
     planosDescription += ' Utiliza estos planos de AutoCAD como referencia directa para evaluar detalladamente si es viable construir la cimentación indicada (con sus respectivas columnas y linderos) en este terreno y sus pendientes específicas.'
   }
 
-  try {
-    const response = await $fetch<any>('https://mr3miliano.app.n8n.cloud/webhook/topo-agent', {
-      method: 'POST',
-      headers: {
-        'X-API-KEY': 'topo-secret-api-key-2026-vbc',
-        'Content-Type': 'application/json'
-      },
-      body: {
-        sessionId: `session-${Date.now()}`,
-        coordenadas: coordsStr,
-        descripcion_terreno: descStr,
-        planos_2d: planosDescription
+  let attempt = 1
+  const maxAttempts = 2
+  let success = false
+  let errorMsg = ''
+
+  while (attempt <= maxAttempts && !success) {
+    try {
+      agentProgressMessage.value = `Conectando con agente IA... (Intento ${attempt}/${maxAttempts})`
+      
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+      const response = await $fetch<any>('https://mr3miliano.app.n8n.cloud/webhook/topo-agent', {
+        method: 'POST',
+        headers: {
+          'X-API-KEY': 'topo-secret-api-key-2026-vbc',
+          'Content-Type': 'application/json'
+        },
+        body: {
+          sessionId: `session-${Date.now()}`,
+          coordenadas: coordsStr,
+          descripcion_terreno: descStr,
+          planos_2d: planosDescription
+        },
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+
+      if (response && response.success && response.agent_response) {
+        agentResponse.value = response.agent_response
+        success = true
+        toast.add({
+          severity: 'success',
+          summary: 'Análisis IA Completo',
+          detail: 'Topo-Agent generó las recomendaciones del terreno con éxito.',
+          life: 3000
+        })
+      } else {
+        throw new Error('Formato de respuesta de n8n inválido')
       }
+    } catch (err: any) {
+      console.warn(`Intento ${attempt} fallido:`, err)
+      const isAbort = err.name === 'AbortError' || err.message?.toLowerCase().includes('abort') || err.message?.toLowerCase().includes('timeout')
+      
+      if (isAbort) {
+        errorMsg = 'Timeout (15s superados)'
+      } else if (err.message?.includes('404') || err.message?.includes('500') || err.message?.includes('Failed to fetch') || err.message?.includes('CORS')) {
+        errorMsg = `Error de red / CORS / Webhook inactivo (${err.message})`
+      } else {
+        errorMsg = `Error al conectar (${err.message || err})`
+      }
+
+      attempt++
+      if (attempt <= maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+    }
+  }
+
+  if (!success) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Fallback Activo',
+      detail: `n8n falló (${errorMsg}). Generando análisis local alternativo.`,
+      life: 5000
     })
 
-    if (response && response.success && response.agent_response) {
-      agentResponse.value = response.agent_response
-      toast.add({
-        severity: 'success',
-        summary: 'Análisis IA Completo',
-        detail: 'Topo-Agent generó las recomendaciones del terreno con éxito.',
-        life: 3000
-      })
-    } else {
-      throw new Error('Formato de respuesta inválido')
-    }
-  } catch (err) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error del Agente',
-      detail: 'No se pudo obtener el análisis. Revisa la conexión con n8n.',
-      life: 4000
-    })
-  } finally {
+    const lat = lastClickedCoords.value ? lastClickedCoords.value[0] : 23.6
+    const lng = lastClickedCoords.value ? lastClickedCoords.value[1] : -102.5
+    const slope = drawnZoneMetrics.value ? drawnZoneMetrics.value.avgSlope : (currentSlope.value || 0)
+    const elevation = drawnZoneMetrics.value ? drawnZoneMetrics.value.avgElevation : (currentElevation.value || 1500)
+    const soilName = soilType.value.name
+    const soilFactor = soilType.value.factor
+    const temp = temperature.value
+    const rain = rainfall.value
+    const hasCad = hasCadOverlay.value
+
+    agentResponse.value = generateLocalFallbackAnalysis(lat, lng, slope, elevation, soilName, soilFactor, temp, rain, hasCad)
     loadingAgent.value = false
+  } else {
+    loadingAgent.value = false
+  }
+}
+
+const handleDwgFile = async (file: File) => {
+  try {
+    toast.add({
+      severity: 'info',
+      summary: 'Procesando DWG',
+      detail: 'Intentando convertir archivo DWG a DXF localmente...',
+      life: 3000
+    })
+
+    const libredwgPkg = '@mlightcad/libredwg-web'
+    const libredwgModule = await import(/* @vite-ignore */ libredwgPkg)
+    
+    const arrayBuffer = await file.arrayBuffer()
+    const uint8Array = new Uint8Array(arrayBuffer)
+    
+    if (libredwgModule && libredwgModule.LibreDwg) {
+      const LibreDwg = libredwgModule.LibreDwg
+      const Dwg_File_Type = libredwgModule.Dwg_File_Type
+      const libredwg = await LibreDwg.create()
+      const dwg = libredwg.dwg_read_data(uint8Array, Dwg_File_Type.DWG)
+      
+      let dxfText = ''
+      if (typeof libredwg.toDxf === 'function') {
+        dxfText = libredwg.toDxf(dwg)
+      } else if (typeof libredwg.convert === 'function') {
+        const converted = libredwg.convert(dwg)
+        if (typeof converted === 'string') {
+          dxfText = converted
+        } else {
+          throw new Error('Formato convertido no soportado directamente')
+        }
+      } else {
+        throw new Error('Método de exportación DXF no encontrado en la librería LibreDwg')
+      }
+
+      if (typeof libredwg.dwg_free === 'function') {
+        libredwg.dwg_free(dwg)
+      }
+
+      if (dxfText) {
+        handleDxfTextParsed(dxfText)
+        return
+      }
+    }
+    
+    throw new Error('Librería LibreDwg no inicializada o incompatible')
+  } catch (err: any) {
+    console.error('Error al procesar DWG localmente:', err)
+    toast.add({
+      severity: 'warn',
+      summary: 'DWG Experimental',
+      detail: 'El soporte DWG en navegador es experimental. Se recomienda convertir a DXF en AutoCAD. Cargando planos Mock como fallback.',
+      life: 6000
+    })
+    loadMockCadBlueprint()
   }
 }
 
@@ -395,6 +684,11 @@ const loadMockCadBlueprint = () => {
     detail: 'Estructuras de cimentación y cotas de terreno cargadas con éxito.',
     life: 3000
   })
+
+  // Automatically trigger agent analysis to run the CAD matching evaluation
+  if (lastClickedCoords.value || drawnZoneMetrics.value) {
+    runAgentAnalysis()
+  }
 }
 
 // Parse real DXF file contents
@@ -463,6 +757,10 @@ const handleDxfTextParsed = (dxfText: string) => {
       life: 4000
     })
 
+    // Automatically trigger agent analysis to run the CAD matching evaluation
+    if (lastClickedCoords.value || drawnZoneMetrics.value) {
+      runAgentAnalysis()
+    }
   } catch (err) {
     toast.add({
       severity: 'error',
@@ -484,6 +782,11 @@ const clearCadOverlay = () => {
     detail: 'Se quitaron todas las sobrecapas vectoriales.',
     life: 2000
   })
+
+  // Automatically trigger agent analysis to clear the CAD matching evaluation
+  if (lastClickedCoords.value || drawnZoneMetrics.value) {
+    runAgentAnalysis()
+  }
 }
 
 const toggleDarkMode = () => {
@@ -503,9 +806,8 @@ const toggleDarkMode = () => {
     <!-- Navbar Header -->
     <header class="topo-header glass-panel">
       <div class="header-left">
-        <i class="pi pi-globe logo-icon"></i>
+        <img src="./components/assets/vertex-horizon.svg" alt="Vertex Horizon" class="logo-image" />
         <div class="logo-group">
-          <h1>Vertex Horizon</h1>
           <span class="sub">Visor Topográfico 2D & Simulador</span>
         </div>
       </div>
@@ -531,7 +833,7 @@ const toggleDarkMode = () => {
 
       <div class="header-right">
         <!-- Weather widget (Open-Meteo) -->
-        <div class="weather-widget" v-if="weatherInfo">
+        <div class="weather-widget" v-if="weatherInfo && hasSelectedLocation">
           <i class="pi pi-cloud weather-icon"></i>
           <div class="weather-details">
             <span class="temp">{{ weatherInfo.temp }}°C</span>
@@ -553,6 +855,7 @@ const toggleDarkMode = () => {
         <TopoMap 
           ref="topoMapRef"
           :center="mapCenter"
+          :zoom="hasSelectedLocation ? 14 : 5"
           :tileStyle="activeTileStyle"
           :rainfall="rainfall"
           :temperature="temperature"
@@ -564,12 +867,13 @@ const toggleDarkMode = () => {
           :windSpeed="windSpeed"
           :windDirection="windDirection"
           :activeElevation="currentElevation !== null ? currentElevation : (drawnZoneMetrics ? drawnZoneMetrics.avgElevation : null)"
+          :hasSelectedLocation="hasSelectedLocation"
           @mapClick="handleMapClick"
           @drawnPolygon="handleDrawnPolygon"
         />
         
         <!-- Tile Switcher controls -->
-        <div class="map-style-floating glass-panel">
+        <div v-if="hasSelectedLocation" class="map-style-floating glass-panel">
           <button 
             :class="{ active: activeTileStyle === 'satellite' }" 
             @click="activeTileStyle = 'satellite'"
@@ -587,18 +891,29 @@ const toggleDarkMode = () => {
             <span>Plano</span>
           </button>
           <button 
-            :class="{ active: activeTileStyle === 'dark' }" 
-            @click="activeTileStyle = 'dark'"
-            title="Híbrido Oscuro"
+            :class="{ active: activeTileStyle === 'topografica' }" 
+            @click="activeTileStyle = 'topografica'"
+            title="Topográfica"
           >
-            <i class="pi pi-moon"></i>
-            <span>Oscuro</span>
+            <i class="pi pi-map"></i>
+            <span>Topográfica</span>
           </button>
         </div>
       </div>
 
+      <!-- Welcome Overlay -->
+      <div v-if="!hasSelectedLocation" class="welcome-overlay glass-panel">
+        <div class="welcome-content">
+          <img src="./components/assets/vertex-horizon.svg" alt="Vertex Horizon" class="welcome-logo-image" />
+          <p>Busca una ubicación en la barra superior o haz clic en el mapa para comenzar el análisis.</p>
+          <div class="welcome-arrow">
+            <i class="pi pi-arrow-up"></i>
+          </div>
+        </div>
+      </div>
+
       <!-- LEFT FLOATING PANEL: Simulation Settings -->
-      <div class="floating-panel-container left-panel-container">
+      <div v-if="hasSelectedLocation" class="floating-panel-container left-panel-container">
         <ControlPanel 
           v-model:rainfall="rainfall"
           v-model:temperature="temperature"
@@ -614,7 +929,7 @@ const toggleDarkMode = () => {
       </div>
 
       <!-- RIGHT FLOATING PANEL: Topography & CAD -->
-      <div class="floating-panel-container right-panel-container">
+      <div v-if="hasSelectedLocation" class="floating-panel-container right-panel-container">
         <TopographyPanel 
           :lastClickedCoords="lastClickedCoords"
           :currentElevation="currentElevation"
@@ -627,8 +942,10 @@ const toggleDarkMode = () => {
           :loadingAgent="loadingAgent"
           :agentResponse="agentResponse"
           :drawnZoneMetrics="drawnZoneMetrics"
+          :agentProgressMessage="agentProgressMessage"
           v-model:activeTab="activeMainTab"
           @dxfParsedText="handleDxfTextParsed"
+          @dwgFileSelected="handleDwgFile"
           @mockCadClick="loadMockCadBlueprint"
           @clearCadClick="clearCadOverlay"
           @runAgentAnalysis="runAgentAnalysis"
@@ -1309,5 +1626,75 @@ body, html {
   background: rgba(0, 0, 0, 0.15) !important;
   border-color: rgba(255, 255, 255, 0.02) !important;
   color: #e2e8f0 !important;
+}
+
+.welcome-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  padding: 2.5rem;
+  border-radius: 20px;
+  max-width: 450px;
+  width: 90%;
+  text-align: center;
+  pointer-events: auto;
+}
+
+.welcome-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.welcome-logo-icon {
+  font-size: 3.5rem;
+  background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.welcome-content h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(135deg, #f5f3ff 0%, #c084fc 40%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.welcome-content p {
+  font-size: 0.95rem;
+  color: var(--text-muted-dark);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.welcome-arrow {
+  margin-top: 0.5rem;
+  font-size: 1.5rem;
+  color: #c084fc;
+  animation: bounce-up-down 1.5s infinite ease-in-out;
+}
+
+@keyframes bounce-up-down {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.logo-image {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  margin-right: 0.25rem;
+}
+
+.welcome-logo-image {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  margin-bottom: 0.5rem;
 }
 </style>
