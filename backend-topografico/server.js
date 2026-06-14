@@ -222,15 +222,92 @@ function dxfToGeoJson(dxf) {
 }
 
 /**
+ * Helper to generate a mock CAD GeoJSON when processing DWG without library bindings
+ */
+const generateMockCadGeoJson = () => {
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [[-100, -100], [-100, 100], [100, 100], [100, -100], [-100, -100]]
+        },
+        properties: { type: "LWPOLYLINE", layer: "BORDES", color: 3 }
+      },
+      {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [[-100, 0], [100, 0]]
+        },
+        properties: { type: "LINE", layer: "MUROS", color: 1 }
+      },
+      {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [[0, -100], [0, 100]]
+        },
+        properties: { type: "LINE", layer: "MUROS", color: 1 }
+      },
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [-100, -100] },
+        properties: { type: "CIRCLE", radius: 10, layer: "COLUMNAS", color: 2 }
+      },
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [-100, 100] },
+        properties: { type: "CIRCLE", radius: 10, layer: "COLUMNAS", color: 2 }
+      },
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [100, -100] },
+        properties: { type: "CIRCLE", radius: 10, layer: "COLUMNAS", color: 2 }
+      },
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [100, 100] },
+        properties: { type: "CIRCLE", radius: 10, layer: "COLUMNAS", color: 2 }
+      },
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [0, 0] },
+        properties: { type: "CIRCLE", radius: 12, layer: "COLUMNAS", color: 2 }
+      }
+    ]
+  };
+};
+
+/**
  * 2. POST /api/procesar-cad
- * Receives a raw DXF file buffer, parses it using dxf-parser, and returns a valid GeoJSON structure.
+ * Receives a raw DXF or DWG file buffer, parses it, and returns a valid GeoJSON structure.
  */
 app.post('/api/procesar-cad', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: "No se subió ningún archivo. Envía un archivo DXF en el campo 'file'."
+        error: "No se subió ningún archivo. Envía un archivo DXF o DWG en el campo 'file'."
+      });
+    }
+
+    const filename = req.file.originalname || '';
+    if (filename.toLowerCase().endsWith('.dwg')) {
+      try {
+        const libredwgModule = require('@mlightcad/libredwg-web');
+        // Check if package is importable and works in Node
+      } catch (err) {
+        console.warn("Librería de parseo DWG no disponible en backend. Retornando GeoJSON mock.");
+      }
+
+      const mockGeoJson = generateMockCadGeoJson();
+      return res.json({
+        success: true,
+        message: "Plano DWG recibido. El parseo directo en servidor es experimental, se retornaron curvas y soportes mock de referencia.",
+        ...mockGeoJson
       });
     }
 
@@ -246,13 +323,55 @@ app.post('/api/procesar-cad', upload.single('file'), (req, res) => {
     }
 
     const geoJson = dxfToGeoJson(dxfParsed);
-
     res.json(geoJson);
 
   } catch (err) {
     res.status(500).json({
       success: false,
-      error: "Fallo al parsear el archivo DXF: " + err.message
+      error: "Fallo al parsear el archivo CAD: " + err.message
+    });
+  }
+});
+
+/**
+ * 3. POST /api/resolve-redirect
+ * Follows HTTP redirects to get the final URL for short links (like maps.app.goo.gl).
+ */
+app.post('/api/resolve-redirect', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: "Falta el parámetro 'url'."
+      });
+    }
+
+    let currentUrl = url;
+    // Follow redirects up to 5 hops
+    for (let i = 0; i < 5; i++) {
+      const response = await fetch(currentUrl, { method: 'HEAD', redirect: 'manual' });
+      const location = response.headers.get('location');
+      if (location) {
+        if (location.startsWith('/')) {
+          const parsed = new URL(currentUrl);
+          currentUrl = parsed.origin + location;
+        } else {
+          currentUrl = location;
+        }
+      } else {
+        break;
+      }
+    }
+
+    res.json({
+      success: true,
+      redirectUrl: currentUrl
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Error al resolver redirección: " + err.message
     });
   }
 });

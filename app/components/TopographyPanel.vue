@@ -14,10 +14,12 @@ const props = defineProps<{
   agentResponse: any | null
   drawnZoneMetrics: any | null
   activeTab: 'terreno' | 'agente'
+  agentProgressMessage?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'dxfParsedText', text: string): void
+  (e: 'dwgFileSelected', file: File): void
   (e: 'mockCadClick'): void
   (e: 'clearCadClick'): void
   (e: 'runAgentAnalysis'): void
@@ -42,6 +44,12 @@ const triggerFileInput = () => {
 const handleFileChange = (event: any) => {
   const file = event.target.files[0]
   if (!file) return
+
+  const isDwg = file.name.toLowerCase().endsWith('.dwg')
+  if (isDwg) {
+    emit('dwgFileSelected', file)
+    return
+  }
 
   const reader = new FileReader()
   reader.onload = (e: any) => {
@@ -305,13 +313,13 @@ const terzaghiTooltipText = computed(() => {
             type="file" 
             ref="dxfInputRef" 
             @change="handleFileChange" 
-            accept=".dxf" 
+            accept=".dxf,.dwg" 
             style="display: none;"
           />
           
           <div class="button-grid">
             <Button 
-              label="Importar DXF" 
+              label="Importar DXF/DWG" 
               icon="pi pi-file-import" 
               class="p-button-outlined p-button-sm flex-1"
               @click="triggerFileInput"
@@ -385,7 +393,7 @@ const terzaghiTooltipText = computed(() => {
                 <i class="pi pi-spin pi-cog loading-cog-icon"></i>
                 <div class="glowing-ring"></div>
               </div>
-              <span class="loading-text">Llamando a n8n y OpenAI...</span>
+              <span class="loading-text">{{ agentProgressMessage || 'Llamando a n8n y OpenAI...' }}</span>
               <div class="loading-progress-bar">
                 <div class="progress-bar-fill"></div>
               </div>
