@@ -417,63 +417,71 @@ const terzaghiTooltipText = computed(() => {
                 <p class="conclusion-desc">{{ agentResponse?.conclusion_para_agente_principal }}</p>
               </div>
 
-              <!-- Tabs selector -->
+              <!-- Tabs selector (4x2 Grid Layout for perfect UX visibility) -->
               <div class="agent-tabs">
                 <button 
                   :class="{ active: activeAgentSection === 'topo' }" 
                   @click="activeAgentSection = 'topo'"
                   title="Topografía"
                 >
-                  Topografía
+                  <i class="pi pi-compass"></i>
+                  <span>Topografía</span>
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'riesgos' }" 
                   @click="activeAgentSection = 'riesgos'"
                   title="Riesgos"
                 >
-                  Riesgos
+                  <i class="pi pi-cloud-rain"></i>
+                  <span>Riesgos</span>
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'normativa' }" 
                   @click="activeAgentSection = 'normativa'"
                   title="Linderos"
                 >
-                  Linderos
+                  <i class="pi pi-folder-open"></i>
+                  <span>Linderos</span>
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'permisos' }" 
                   @click="activeAgentSection = 'permisos'"
                   title="Permisos & Normas"
                 >
-                  Permisos
+                  <i class="pi pi-file"></i>
+                  <span>Permisos</span>
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'termico' }" 
                   @click="activeAgentSection = 'termico'"
                   title="Térmico"
                 >
-                  Térmico
+                  <i class="pi pi-sun"></i>
+                  <span>Térmico</span>
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'cotejo' }" 
                   @click="activeAgentSection = 'cotejo'"
                   :title="hasCadOverlay ? 'Cotejo CAD' : 'Estimación Obra'"
                 >
-                  {{ hasCadOverlay ? 'Cotejo CAD' : 'Estimación Obra' }}
+                  <i class="pi pi-shield"></i>
+                  <span>{{ hasCadOverlay ? 'Cotejo' : 'Estimación' }}</span>
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'costos' }" 
                   @click="activeAgentSection = 'costos'"
                   title="Costos & Finanzas"
                 >
-                  Costos
+                  <i class="pi pi-dollar"></i>
+                  <span>Costos</span>
                 </button>
                 <button 
                   :class="{ active: activeAgentSection === 'sostenibilidad' }" 
                   @click="activeAgentSection = 'sostenibilidad'"
                   title="Sostenibilidad"
                 >
-                  Sostenibilidad
+                  <i class="pi pi-leaf"></i>
+                  <span>Sostenibilidad</span>
                 </button>
               </div>
 
@@ -1169,32 +1177,48 @@ const terzaghiTooltipText = computed(() => {
 }
 
 .agent-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   background: rgba(0, 0, 0, 0.35);
   border-radius: 8px;
-  padding: 3px;
-  gap: 3px;
+  padding: 4px;
+  gap: 4px;
   margin-bottom: 0.85rem;
-  overflow-x: auto;
-  scrollbar-width: none; /* Firefox */
-}
-
-.agent-tabs::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
 }
 
 .agent-tabs button {
-  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
   background: transparent;
   border: none;
   font-family: inherit;
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   font-weight: 800;
   color: var(--text-muted-dark);
-  padding: 0.45rem 0.6rem;
-  border-radius: 5px;
+  padding: 0.45rem 0.2rem;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: normal;
+  text-align: center;
+}
+
+.agent-tabs button i {
+  font-size: 0.8rem;
+  color: #c084fc;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.agent-tabs button:hover i {
+  transform: translateY(-1px);
+}
+
+.agent-tabs button.active i {
+  color: #ffffff;
+  filter: drop-shadow(0 0 3px #c084fc);
 }
 
 /* Actions Row Buttons Styling */
